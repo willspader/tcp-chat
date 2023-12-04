@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-// TODO:
-// rate limiter
-// throttling
-
 type MessageType int
 
 type Message struct {
