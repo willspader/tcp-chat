@@ -3,14 +3,20 @@ package main
 import (
 	"log"
 	"net"
+	"time"
 )
+
+// TODO:
+// rate limiter
+// throttling
 
 type MessageType int
 
 type Message struct {
-	Conn net.Conn
-	Type MessageType
-	Text []byte
+	Conn      net.Conn
+	Type      MessageType
+	Text      []byte
+	CreatedAt time.Time
 }
 
 const Port = "9595"
@@ -18,7 +24,7 @@ const Port = "9595"
 const (
 	NewClient MessageType = iota
 	DisconnectedClient
-	NewMessage
+	NewTextClient
 )
 
 func main() {
@@ -36,11 +42,10 @@ func HandleConnection(conn net.Conn, channel chan Message) {
 		buffer := make([]byte, 512)
 		_, err := conn.Read(buffer)
 		if err != nil {
-			log.Println("Client Disconnected. Closing the connection.")
-			channel <- Message{Conn: conn, Type: DisconnectedClient}
+			channel <- NewMessage(conn, DisconnectedClient, nil)
 			break
 		}
-		channel <- Message{Conn: conn, Type: NewMessage, Text: buffer}
+		channel <- NewMessage(conn, NewTextClient, buffer)
 	}
 }
 
@@ -50,10 +55,12 @@ func Chat(broadcastChan chan Message) {
 		msg := <-broadcastChan
 		if msg.Type == NewClient {
 			clients[msg.Conn.RemoteAddr().String()] = msg.Conn
+			log.Println("New client = ", msg.Conn.RemoteAddr().String())
 		} else if msg.Type == DisconnectedClient {
 			delete(clients, msg.Conn.RemoteAddr().String())
 			msg.Conn.Close()
-		} else if msg.Type == NewMessage {
+			log.Println("Client disconnected. Connection closed.")
+		} else if msg.Type == NewTextClient {
 			for _, conn := range clients {
 				if conn.RemoteAddr().String() == msg.Conn.RemoteAddr().String() {
 					continue
@@ -63,6 +70,18 @@ func Chat(broadcastChan chan Message) {
 		} else {
 			log.Println("Received an unknown message type = ", msg.Type)
 		}
+	}
+}
+
+func NewMessage(conn net.Conn, msgType MessageType, buffer []byte) Message {
+	if msgType == NewClient {
+		return Message{Conn: conn, Type: NewClient, CreatedAt: time.Now()}
+	} else if msgType == DisconnectedClient {
+		return Message{Conn: conn, Type: DisconnectedClient, CreatedAt: time.Now()}
+	} else if msgType == NewTextClient {
+		return Message{Conn: conn, Type: NewTextClient, Text: buffer, CreatedAt: time.Now()}
+	} else {
+		return Message{Conn: conn, CreatedAt: time.Now()}
 	}
 }
 
@@ -83,7 +102,7 @@ func awaitNewConnection(ln net.Listener, channel chan Message) net.Conn {
 			log.Println("Could not accept connection. ", err)
 		}
 
-		channel <- Message{Conn: conn, Type: NewClient}
+		channel <- NewMessage(conn, NewClient, nil)
 		log.Println("connection accepted. ", conn.RemoteAddr())
 
 		return conn
