@@ -33,8 +33,17 @@ func main() {
 	channel := make(chan Message)
 	go Chat(channel)
 
-	conn := awaitNewConnection(ln, channel)
-	go HandleConnection(conn, channel)
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Println("Could not accept connection. ", err)
+		}
+
+		channel <- NewMessage(conn, NewClient, nil)
+		log.Println("connection accepted. ", conn.RemoteAddr())
+
+		go HandleConnection(conn, channel)
+	}
 }
 
 func HandleConnection(conn net.Conn, channel chan Message) {
@@ -51,6 +60,7 @@ func HandleConnection(conn net.Conn, channel chan Message) {
 
 func Chat(broadcastChan chan Message) {
 	clients := make(map[string]net.Conn)
+	lastNewTextClient := make(map[string]time.Time)
 	for {
 		msg := <-broadcastChan
 		if msg.Type == NewClient {
@@ -61,14 +71,20 @@ func Chat(broadcastChan chan Message) {
 			msg.Conn.Close()
 			log.Println("Client disconnected. Connection closed.")
 		} else if msg.Type == NewTextClient {
-			for _, conn := range clients {
-				if conn.RemoteAddr().String() == msg.Conn.RemoteAddr().String() {
-					continue
+			lastTime := lastNewTextClient[msg.Conn.RemoteAddr().String()]
+			if !lastTime.IsZero() && lastTime.After(time.Now().Add(-time.Second*5)) {
+				msg.Conn.Write([]byte("The time elapse between messages is 5 seconds."))
+			} else {
+				lastNewTextClient[msg.Conn.RemoteAddr().String()] = time.Now()
+				for _, conn := range clients {
+					if conn.RemoteAddr().String() == msg.Conn.RemoteAddr().String() {
+						continue
+					}
+					conn.Write(msg.Text)
 				}
-				conn.Write(msg.Text)
 			}
 		} else {
-			log.Println("Received an unknown message type = ", msg.Type)
+			log.Println("Unknown message type received = ", msg.Type)
 		}
 	}
 }
@@ -93,18 +109,4 @@ func startServer() net.Listener {
 
 	log.Printf("Listening on port %s\n", Port)
 	return ln
-}
-
-func awaitNewConnection(ln net.Listener, channel chan Message) net.Conn {
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Println("Could not accept connection. ", err)
-		}
-
-		channel <- NewMessage(conn, NewClient, nil)
-		log.Println("connection accepted. ", conn.RemoteAddr())
-
-		return conn
-	}
 }
