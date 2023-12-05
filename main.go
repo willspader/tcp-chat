@@ -49,6 +49,7 @@ func HandleConnection(conn net.Conn, channel chan Message) {
 			channel <- NewMessage(conn, DisconnectedClient, nil)
 			break
 		}
+
 		channel <- NewMessage(conn, NewTextClient, buffer)
 	}
 }
