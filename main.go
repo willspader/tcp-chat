@@ -9,10 +9,9 @@ import (
 type MessageType int
 
 type Message struct {
-	Conn      net.Conn
-	Type      MessageType
-	Text      []byte
-	CreatedAt time.Time
+	Conn net.Conn
+	Type MessageType
+	Text []byte
 }
 
 const Port = "9595"
@@ -87,13 +86,13 @@ func Chat(broadcastChan chan Message) {
 
 func NewMessage(conn net.Conn, msgType MessageType, buffer []byte) Message {
 	if msgType == NewClient {
-		return Message{Conn: conn, Type: NewClient, CreatedAt: time.Now()}
+		return Message{Conn: conn, Type: NewClient}
 	} else if msgType == DisconnectedClient {
-		return Message{Conn: conn, Type: DisconnectedClient, CreatedAt: time.Now()}
+		return Message{Conn: conn, Type: DisconnectedClient}
 	} else if msgType == NewTextClient {
-		return Message{Conn: conn, Type: NewTextClient, Text: buffer, CreatedAt: time.Now()}
+		return Message{Conn: conn, Type: NewTextClient, Text: buffer}
 	} else {
-		return Message{Conn: conn, CreatedAt: time.Now()}
+		return Message{Conn: conn}
 	}
 }
 
